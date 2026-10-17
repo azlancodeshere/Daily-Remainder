@@ -2,7 +2,7 @@ import mongoose , {Document, Schema, Model} from "mongoose"
 import bcrypt from "bcryptjs"
 
 
-export interface User extends Document {
+export interface IUser extends Document {
     name:string,
     email:string,
     password:string,
@@ -12,7 +12,7 @@ export interface User extends Document {
 }
 
 
-const userSchema = new Schema<User>(
+const userSchema = new Schema<IUser>(
     {
         name:{
             type:String,
@@ -32,9 +32,18 @@ const userSchema = new Schema<User>(
             type:String,
             required:true,
             minlenghth:6,
-            
+
         }
     },
 
     {timestamps:true}
 )
+
+
+userSchema.pre<IUser>("save", async function () {
+  if (!this.isModified("password")) return;
+  this.password = await bcrypt.hash(this.password, 10);
+});
+
+
+export const User : Model<IUser> = mongoose.model<IUser>("User", userSchema)
