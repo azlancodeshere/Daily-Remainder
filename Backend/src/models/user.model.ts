@@ -9,6 +9,8 @@ export interface IUser extends Document {
     careatedAt:Date;
     updatedAt:Date;
     matchPassword(enteredPassword:string): Promise<boolean>
+    generateAccessToken(): string;
+  generateRefreshToken(): string;
 }
 
 
@@ -49,6 +51,21 @@ userSchema.methods.matchPassword = async function (
   enteredPassword: string
 ): Promise<boolean> {
   return await bcrypt.compare(enteredPassword, this.password);
+};
+
+userSchema.methods.generateAccessToken = function (): string {
+  return jwt.sign(
+    {
+      _id: this._id,
+      email: this.email,
+      name: this.name,
+      role: this.role,
+    },
+    process.env.ACCESS_TOKEN_SECRET as string,
+    {
+      expiresIn: process.env.ACCESS_TOKEN_EXPIRY as SignOptions["expiresIn"],
+    }
+  );
 };
 
 
