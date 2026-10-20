@@ -1,6 +1,38 @@
+import { Request, Response, CookieOptions } from "express";
+import { Types } from "mongoose";
+import { User } from "../models/user.model";
+import { ApiError } from "../../utils/ApiError";
+import { ApiResponse } from "../../utils/ApiResponse";
 
+const cookieOptions: CookieOptions = {
+  httpOnly: true,
+  secure: process.env.NODE_ENV === "production",
+  sameSite: "strict",
+};
 
+const generateAccessAndRefreshTokens = async (
+  userId: Types.ObjectId
+): Promise<{ accessToken: string; refreshToken: string }> => {
+  try {
+    const user = await User.findById(userId);
 
+    if (!user) {
+      throw new ApiError(404, "User not found");
+    }
+
+    const accessToken = user.generateAccessToken();
+    const refreshToken = user.generateRefreshToken();
+
+    user.refreshToken = refreshToken;
+    await user.save({ validateBeforeSave: false });
+
+    return { accessToken, refreshToken };
+  } catch (error) {
+    if (error instanceof ApiError) throw error;
+
+    throw new ApiError(500, "Something went wrong while generating tokens");
+  }
+};
 
 export const registerUser = async (req: Request, res: Response) => {
   try {
@@ -63,3 +95,4 @@ export const registerUser = async (req: Request, res: Response) => {
     });
   }
 };
+
