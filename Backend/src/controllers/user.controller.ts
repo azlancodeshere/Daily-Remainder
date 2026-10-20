@@ -1,5 +1,6 @@
 import { Request, Response, CookieOptions } from "express";
 import { Types } from "mongoose";
+import jwt from "jsonwebtoken";
 import { User } from "../models/user.model";
 import { ApiError } from "../../utils/ApiError";
 import { ApiResponse } from "../../utils/ApiResponse";
@@ -139,6 +140,68 @@ export const loginUser = async (req: Request, res: Response) => {
       );
   } catch (error) {
     console.log("login error:", error);
+
+    const statusCode = error instanceof ApiError ? error.statusCode : 500;
+    const message =
+      error instanceof Error ? error.message : "Something went wrong";
+
+    return res.status(statusCode).json({
+      success: false,
+      statusCode,
+      message,
+    });
+  }
+};
+
+export const refreshAccessToken = async (req: Request, res: Response) => {
+  try {
+    const incomingRefreshToken =
+      req.cookies?.refreshToken || req.body?.refreshToken;
+
+    if (!incomingRefreshToken) {
+      throw new ApiError(401, "Unauthorized request");
+    }
+
+    let decodedToken: { _id: string };
+
+    try {
+      decodedToken = jwt.verify(
+        String(incomingRefreshToken),
+        process.env.REFRESH_TOKEN_SECRET as string
+      ) as { _id: string };
+    } catch {
+      throw new ApiError(401, "Invalid or expired refresh token");
+    }
+
+    const user = await User.findById(decodedToken._id).select(
+      "+refreshToken"
+    );
+
+    if (!user) {
+      throw new ApiError(401, "Invalid refresh token");
+    }
+
+    if (user.refreshToken !== incomingRefreshToken) {
+      throw new ApiError(401, "Refresh token is expired or reused");
+    }
+
+    const { accessToken, refreshToken } = await generateAccessAndRefreshTokens(
+      user._id as Types.ObjectId
+    );
+
+    const refreshedUser = await User.findById(user._id).select(
+      "-password -refreshToken"
+    );
+
+    return res
+      .status(200)
+      .cookie("accessToken", accessToken, cookieOptions)
+      .cookie("refreshToken", refreshToken, cookieOptions)
+      .json(
+        new ApiResponse(200, refreshedUser, "Access token refreshed successfully")
+      );
+  } catch (error) {
+    console.log("refresh token error:", error);
 
     const statusCode = error instanceof ApiError ? error.statusCode : 500;
     const message =
